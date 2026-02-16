@@ -9,10 +9,9 @@ import { StudentDashboard, HRDashboard, TrainerDashboard } from './pages/Dashboa
 import ProtectedRoute from './components/ProtectedRoute';
 import { UserRole } from './types';
 
-// Helper component for /portal logic
 const PortalRedirect: React.FC = () => {
-  const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
+  const { user, isAuthenticated } = useAuth();
+  if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
   
   switch(user.role) {
     case UserRole.ADMIN: return <Navigate to="/portal/admin" replace />;
@@ -25,29 +24,31 @@ const PortalRedirect: React.FC = () => {
 
 const Unauthorized: React.FC = () => (
   <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-    <h1 className="text-4xl font-bold text-red-600 mb-4">403 - Forbidden</h1>
-    <p className="text-gray-600 mb-6 text-center">You do not have the required permissions to access this page.</p>
-    <button 
-      onClick={() => window.location.href = '#/login'} 
-      className="text-indigo-600 hover:text-indigo-800 font-medium underline"
-    >
-      Return to Login
-    </button>
+    <div className="bg-white p-10 rounded-3xl shadow-xl border border-gray-100 flex flex-col items-center max-w-md">
+      <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-6">
+        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+      </div>
+      <h1 className="text-3xl font-bold text-gray-900 mb-2">Access Denied</h1>
+      <p className="text-gray-500 text-center mb-8">You don't have permission to view this section of the portal.</p>
+      <button 
+        onClick={() => window.location.href = '#/login'} 
+        className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-black transition-all"
+      >
+        Back to Login
+      </button>
+    </div>
   </div>
 );
 
 const AppContent: React.FC = () => {
   return (
     <Routes>
-      {/* Public Routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/unauthorized" element={<Unauthorized />} />
       
-      {/* Root redirection */}
       <Route path="/" element={<Navigate to="/portal" replace />} />
 
-      {/* Protected Portal Routes */}
       <Route 
         path="/portal" 
         element={
@@ -64,7 +65,6 @@ const AppContent: React.FC = () => {
         <Route path="trainer" element={<ProtectedRoute requiredRole={UserRole.TRAINER}><TrainerDashboard /></ProtectedRoute>} />
       </Route>
 
-      {/* 404 - Redirect back home */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

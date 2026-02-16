@@ -9,16 +9,20 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Helper to decode JWT without external libraries
+// Robust JWT decoding for production
 const decodeJWT = (token: string): JWTPayload | null => {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
     
-    const base64Url = parts[1];
+    let base64Url = parts[1];
+    // Handle base64url padding
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = base64.length % 4;
+    const paddedBase64 = pad ? base64 + '='.repeat(4 - pad) : base64;
+    
     const jsonPayload = decodeURIComponent(
-      window.atob(base64)
+      window.atob(paddedBase64)
         .split('')
         .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
         .join('')
@@ -31,8 +35,8 @@ const decodeJWT = (token: string): JWTPayload | null => {
 };
 
 /**
- * Normalizes various Spring Boot role formats into our UserRole enum.
- * Handles: "ADMIN", "ROLE_ADMIN", or roles inside an "authorities" array.
+ * Normalizes roles from Spring Security format.
+ * Matches: "ADMIN", "ROLE_ADMIN", or objects { "authority": "ROLE_ADMIN" }
  */
 const normalizeRole = (payload: JWTPayload): UserRole => {
   const roleMap: Record<string, UserRole> = {
@@ -46,17 +50,21 @@ const normalizeRole = (payload: JWTPayload): UserRole => {
     'ROLE_TRAINER': UserRole.TRAINER
   };
 
-  const check = (val: any): UserRole | null => {
-    if (typeof val !== 'string') return null;
-    const cleanRole = val.toUpperCase();
-    return roleMap[cleanRole] || null;
+  const extract = (val: any): UserRole | null => {
+    if (typeof val === 'string') {
+      const upper = val.toUpperCase();
+      return roleMap[upper] || null;
+    }
+    if (val && typeof val === 'object' && val.authority) {
+      return extract(val.authority);
+    }
+    return null;
   };
 
-  // 1. Check authorities array (Standard Spring Security)
+  // 1. Check authorities (Spring Security default)
   if (payload.authorities && Array.isArray(payload.authorities)) {
     for (const auth of payload.authorities) {
-      const val = typeof auth === 'string' ? auth : auth.authority;
-      const found = check(val);
+      const found = extract(auth);
       if (found) return found;
     }
   }
@@ -64,14 +72,14 @@ const normalizeRole = (payload: JWTPayload): UserRole => {
   // 2. Check roles array
   if (payload.roles && Array.isArray(payload.roles)) {
     for (const r of payload.roles) {
-      const found = check(r);
+      const found = extract(r);
       if (found) return found;
     }
   }
 
   // 3. Check direct role string
   if (payload.role) {
-    const found = check(payload.role);
+    const found = extract(payload.role);
     if (found) return found;
   }
 
@@ -89,7 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const token = localStorage.getItem('jwt_token');
     if (token) {
       const payload = decodeJWT(token);
-      // Ensure token is not expired (payload.exp is in seconds)
       if (payload && payload.exp * 1000 > Date.now()) {
         const role = normalizeRole(payload);
         setState({
@@ -116,10 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = (token: string) => {
     const payload = decodeJWT(token);
-    if (!payload) {
-      console.error("Login failed: Invalid token received");
-      return;
-    }
+    if (!payload) return;
 
     localStorage.setItem('jwt_token', token);
     const role = normalizeRole(payload);
