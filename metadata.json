@@ -1,0 +1,5 @@
+{
+  "name": "Admin Portal - JWT Auth",
+  "description": "A secure React + TypeScript portal featuring robust JWT authentication, role-based access control, and normalized role handling for Spring Boot backends.",
+  "requestFramePermissions": []
+}
