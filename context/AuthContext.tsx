@@ -9,14 +9,12 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Robust JWT decoding for production
 const decodeJWT = (token: string): JWTPayload | null => {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
     
     let base64Url = parts[1];
-    // Handle base64url padding
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const pad = base64.length % 4;
     const paddedBase64 = pad ? base64 + '='.repeat(4 - pad) : base64;
@@ -34,10 +32,6 @@ const decodeJWT = (token: string): JWTPayload | null => {
   }
 };
 
-/**
- * Normalizes roles from Spring Security format.
- * Matches: "ADMIN", "ROLE_ADMIN", or objects { "authority": "ROLE_ADMIN" }
- */
 const normalizeRole = (payload: JWTPayload): UserRole => {
   const roleMap: Record<string, UserRole> = {
     'ADMIN': UserRole.ADMIN,
@@ -61,7 +55,7 @@ const normalizeRole = (payload: JWTPayload): UserRole => {
     return null;
   };
 
-  // 1. Check authorities (Spring Security default)
+  // 1. Check authorities (Standard Spring Security format)
   if (payload.authorities && Array.isArray(payload.authorities)) {
     for (const auth of payload.authorities) {
       const found = extract(auth);
@@ -69,18 +63,17 @@ const normalizeRole = (payload: JWTPayload): UserRole => {
     }
   }
 
-  // 2. Check roles array
+  // 2. Check direct role/roles strings
+  if (payload.role) {
+    const found = extract(payload.role);
+    if (found) return found;
+  }
+
   if (payload.roles && Array.isArray(payload.roles)) {
     for (const r of payload.roles) {
       const found = extract(r);
       if (found) return found;
     }
-  }
-
-  // 3. Check direct role string
-  if (payload.role) {
-    const found = extract(payload.role);
-    if (found) return found;
   }
 
   return UserRole.USER;
